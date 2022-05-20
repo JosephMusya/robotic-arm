@@ -97,6 +97,14 @@ global z_target
 r = z_target;
 
 
+function makeMatrixGlobal(homing_matrix)
+global matrixH
+matrixH = homing_matrix;
+
+function r = getMatrix
+global matrixH
+r = matrixH;
+
 function setDefault
 path = 'C:/Users/josep/Desktop/JOSEE 5.1/Project/coding/urdf/urdf/assemblyurdf.SLDASM/urdf/assemblyurdf.SLDASM.urdf';
 my_robot = importrobot(path);
@@ -104,9 +112,10 @@ config = homeConfiguration(my_robot);
 makeGlobal(my_robot)
 makeGlobalc(config)
 show(my_robot,config);
-xlim([-0.4000 0.4000])
-ylim([-0.4000 0.4000])
 
+xlim([-0.4000 0.1000])
+ylim([-0.4000 0.1000])
+zlim([-0.3 0.3])
 view([110 40])
 function gui_OpeningFcn(hObject, eventdata, handles, varargin)
 setDefault
@@ -149,10 +158,10 @@ config(4).JointPosition = deg2rad(th4);
 config(5).JointPosition = deg2rad(th5);
 
 show(r,config);
+xlim([-0.4000 0.1000])
+ylim([-0.4000 0.1000])
+zlim([-0.3 0.3])
 view([110 40])
-
-xlim([-0.4000 0.4000])
-ylim([-0.4000 0.4000])
 
 function slider1_Callback(hObject, eventdata, handles)
 th = get(hObject,'Value');
@@ -248,12 +257,30 @@ function edit3_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
- 
+function HTM = DHP(th,alph,d,r)
+th = deg2rad(th);
+alph = deg2rad(alph);
+MATX = [
+    cos(th) -sin(th)*cos(alph) sin(th)*sin(alph) r*cos(th)
+    sin(th) cos(th)*cos(alph) -cos(th)*sin(alph) r*sin(th)
+    0 sin(alph) cos(alph) d
+    0 0 0 1
+];
+HTM.MATX = MATX;
+
+
 function angles = ikine(x,y,z,ori)
-a1 = 1;
-a2 = 1;
-a3 = 3;
-a4 = 2; 
+a1 = 1.1903;
+a2 = 0.7120;
+a3 = 1.3455;
+a4 = 0.8184; 
+a5 = 0.2467;
+a6 = 0.7794;
+
+x = x - a6;
+a4 = a4 + a5;
+
+H0_5 = ori;
 
 r3 = sqrt(x*x + y*y);
 r2 = z - a1;
@@ -266,9 +293,27 @@ theta1 = rad2deg(atan(y/x));
 theta2 = rad2deg(phi2 - phi1);
 theta3 = rad2deg(deg2rad(180) - phi3);
 
+HTM1 = DHP(theta1,90,a1,a2);
+HTM2 = DHP(theta2,0,0,a3);
+HTM3 = DHP(theta3+90,90,0,0);
+
+H0_1 = HTM1.MATX;
+H1_2 = HTM2.MATX;
+H2_3 = HTM3.MATX;
+
+H0_3 = H0_1*H1_2*H2_3;
+
+H3_5 = inv(H0_3)\H0_5;
+
+theta4 = rad2deg(asin(H3_5(1,3)));
+theta5 = rad2deg(asin(H3_5(3,1)));
+
 angles.theta1 = theta1;
 angles.theta2 = theta2;
 angles.theta3 = theta3;
+angles.theta4 = theta4;
+angles.theta5 = theta5;
+
 
 function move(mat,count)
 framesPerSecond = 24;
@@ -282,34 +327,56 @@ for i=1:count
 th1 = mat(i,1);
 th2 = mat(i,2);
 th3 = mat(i,3);
+th4 = mat(i,4);
 th5 = mat(i,5);
 
 config(1).JointPosition = deg2rad(th1);
 config(2).JointPosition = deg2rad(th2);
 config(3).JointPosition = deg2rad(th3);
-config(4).JointPosition = deg2rad(0);
+config(4).JointPosition = deg2rad(th4);
 config(5).JointPosition = deg2rad(th5);
 
 
-show(my_robot,config);
+show(my_robot,config,'PreservePlot',true);
+
+xlim([-0.4000 0.1000])
+ylim([-0.4000 0.1000])
+zlim([-0.3 0.3])
 view([110 40]);
+
 waitfor(r);
 end
 function console
     fig = uifigure;
     uialert(fig,'Cant Reach the Point\nOut of workspace','ERROR');
+    
+    
+function new_mat = home_mat(mat)
+angle1 = flip(mat(:,1))'';
+angle2 = flip(mat(:,2))'';
+angle3 = flip(mat(:,3))'';
+angle4 = flip(mat(:,4))'';
+angle5 = flip(mat(:,5))'';
+
+new_mat = [angle1 angle2 angle3 angle4 angle5];
+
 function radiobutton1_Callback(hObject, eventdata, handles)
 x = getX;
 y = getY;
 z = getZ;
-
-angles = ikine(x,y,z);
+orientation = [
+    1 0 0 0
+    0 0 -1 0
+    0 1 0 0
+    0 0 0 1
+    ];
+angles = ikine(x,y,z,orientation);
 
 th1 = (angles.theta1);
-th2 = (angles.theta2);
-th3 = (angles.theta3);
-th4 = 0;
-th5 = -100;
+th2 = 90 + (angles.theta2);
+th3 = -90 + (angles.theta3);
+th4 = (angles.theta4);
+th5 = -(90 - (angles.theta5));
 
 start = 0;
 count = 50;
@@ -319,7 +386,6 @@ angle3 = linspace(start,th3,count);
 angle4 = linspace(start,th4,count);
 angle5 = linspace(start,th5,count);
 
-    
 if isnan(angle1)
     console
 elseif isnan(angle2)
@@ -331,7 +397,112 @@ elseif isnan(angle4)
 elseif isnan(angle5)
     console
 else
-mat = [angle1;angle2;angle3;angle4;angle5]'
+mat = [angle1;angle2;angle3;angle4;angle5]';
+homing_matrix = home_mat(mat);
+makeMatrixGlobal(homing_matrix);
 move(mat,count);
+end
+
+
+% --- If Enable == 'on', executes on mouse press in 5 pixel border.
+% --- Otherwise, executes on mouse press in 5 pixel border or over slider1.
+function slider1_ButtonDownFcn(hObject, eventdata, handles)
+% hObject    handle to slider1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+function disp_message(message)
+myicon = imread("avatar.png");
+msgbox(message,"Success","custom",myicon); 
+
+function pushbutton1_Callback(hObject, eventdata, handles)
+matrix = getMatrix;
+if isempty(matrix)
+    py.print("Robot Homed")
+
+else
+    count = size(matrix(:,1));
+    move(matrix,count)
+    clearvars matrix
+    msg = 'Robot Homed Successfuly';
+    disp_message(msg)    
+end
+% hObject    handle to pushbutton1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+function test_joint(joint,n)
+framesPerSecond = 100;
+
+r = rateControl(framesPerSecond);
+my_robot = getGlobal;
+config = getGlobalc;
+if (n == 3)
+    config(5).JointPosition = deg2rad(-90);
+elseif (n == 2)
+    config(5).JointPosition = deg2rad(-90);
 
 end
+
+for i=1:140
+th1 = joint(1,i);
+config(n).JointPosition = deg2rad(th1);
+
+show(my_robot,config,'PreservePlot',true);
+
+xlim([-0.4000 0.1000])
+ylim([-0.4000 0.1000])
+zlim([-0.3 0.3])
+view([110 40]);
+
+waitfor(r);
+end
+config(5).JointPosition = deg2rad(0);
+show(my_robot,config,'PreservePlot',true);
+view([110 40]);
+message = 'Joint Test Successful!';
+disp_message(message)
+
+
+% --- Executes on button press in pushbutton2.
+function pushbutton2_Callback(hObject, eventdata, handles)
+
+count = 35;
+
+half_1 = linspace(0,-50,count);
+half_2 = flip(half_1);
+half_3 = linspace(0,50,count);
+half_4 = flip(half_3);
+
+mat = [half_1 half_2 half_3 half_4];
+global joint_number
+n = joint_number;
+
+test_joint(mat,n);
+
+
+
+% --- Executes on button press in radiobutton2.
+function radiobutton2_Callback(hObject, eventdata, handles)
+global joint_number
+joint_number = 1;
+
+function radiobutton3_Callback(hObject, eventdata, handles)
+global joint_number
+joint_number = 2;
+
+
+function radiobutton4_Callback(hObject, eventdata, handles)
+global joint_number
+joint_number = 3;
+
+% --- Executes on button press in radiobutton5.
+function radiobutton5_Callback(hObject, eventdata, handles)
+global joint_number
+joint_number = 4;
+
+
+% --- Executes on button press in radiobutton6.
+function radiobutton6_Callback(hObject, eventdata, handles)
+global joint_number
+joint_number = 5;
