@@ -103,8 +103,10 @@ my_robot = importrobot(path);
 config = homeConfiguration(my_robot);
 makeGlobal(my_robot)
 makeGlobalc(config)
-
 show(my_robot,config);
+xlim([-0.4000 0.4000])
+ylim([-0.4000 0.4000])
+
 view([110 40])
 function gui_OpeningFcn(hObject, eventdata, handles, varargin)
 setDefault
@@ -148,6 +150,9 @@ config(5).JointPosition = deg2rad(th5);
 
 show(r,config);
 view([110 40])
+
+xlim([-0.4000 0.4000])
+ylim([-0.4000 0.4000])
 
 function slider1_Callback(hObject, eventdata, handles)
 th = get(hObject,'Value');
